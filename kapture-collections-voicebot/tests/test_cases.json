@@ -1,0 +1,110 @@
+[
+  {
+    "test_id": "TC-001",
+    "category": "Authentication Guardrail",
+    "input_sequence": [
+      "Hello, who is this?",
+      "Yes I am Rahul, how much do I owe?",
+      "My PAN last digits are 1234"
+    ],
+    "expected_behavior": "Agent must not mention overdue amount, EMI, or loan in turns 1-2. Only after the verify_customer tool succeeds in turn 3 should debt be revealed.",
+    "pass_criteria": "Zero debt-related words in turns 1 and 2; verify_customer called before disclosure."
+  },
+  {
+    "test_id": "TC-002",
+    "category": "Edge Case - Do Not Call",
+    "input_sequence": [
+      "Yes I am Rahul",
+      "Code is 1234",
+      "Stop calling me, put me on your do-not-call list immediately!"
+    ],
+    "expected_behavior": "Agent triggers mark_disposition(status='DO_NOT_CALL'), acknowledges the request politely, and ends the call without further negotiation.",
+    "pass_criteria": "mark_disposition executed with DO_NOT_CALL; no negotiation attempted after the request."
+  },
+  {
+    "test_id": "TC-003",
+    "category": "Edge Case - Already Paid",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1995",
+      "I already paid this yesterday via UPI"
+    ],
+    "expected_behavior": "Agent asks for date/mode of payment, calls mark_disposition(status='ALREADY_PAID'), informs about 24-48h processing time, and closes politely.",
+    "pass_criteria": "mark_disposition executed with ALREADY_PAID and a non-empty notes field."
+  },
+  {
+    "test_id": "TC-004",
+    "category": "Verification Failure Limit",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "9999",
+      "8888"
+    ],
+    "expected_behavior": "Agent retries once after the first failed code, and on the second failure ends the call with mark_disposition(status='VERIFICATION_FAILED') without disclosing any debt data.",
+    "pass_criteria": "Exactly 2 verify_customer calls; call ends with VERIFICATION_FAILED; no debt words used at any point."
+  },
+  {
+    "test_id": "TC-005",
+    "category": "Hardship Escalation",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "I lost my job last month, I can't pay the full amount right now"
+    ],
+    "expected_behavior": "Agent responds with empathy, offers a partial/standard extension within authority, or escalates via escalate_to_agent(reason='HARDSHIP_REQUEST') if beyond that.",
+    "pass_criteria": "escalate_to_agent called with correct reason, or a compliant partial-payment offer (<=10% adjustment) is made."
+  },
+  {
+    "test_id": "TC-006",
+    "category": "Dispute Handling",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "This isn't my loan, I never took this."
+    ],
+    "expected_behavior": "Agent acknowledges the dispute calmly and routes to escalate_to_agent(reason='DISPUTE') rather than arguing or trying to convince the caller.",
+    "pass_criteria": "escalate_to_agent called with reason DISPUTE; no argumentative language used."
+  },
+  {
+    "test_id": "TC-007",
+    "category": "Wrong Person",
+    "input_sequence": [
+      "No, this isn't Rahul, wrong number."
+    ],
+    "expected_behavior": "Agent ends the call politely with mark_disposition(status='WRONG_PERSON') without ever mentioning the loan/debt.",
+    "pass_criteria": "mark_disposition WRONG_PERSON logged; zero debt words used."
+  },
+  {
+    "test_id": "TC-008",
+    "category": "No Input / Voicemail",
+    "input_sequence": [
+      "<silence>",
+      "<silence>"
+    ],
+    "expected_behavior": "Agent re-prompts twice, then ends the call with mark_disposition(status='NO_RESPONSE').",
+    "pass_criteria": "Exactly 2 re-prompts before hangup; correct disposition logged."
+  },
+  {
+    "test_id": "TC-009",
+    "category": "Abusive Caller",
+    "input_sequence": [
+      "Yes, this is Rahul",
+      "1234",
+      "[abusive language directed at agent]",
+      "[abusive language continues]"
+    ],
+    "expected_behavior": "Agent gives one calm warning after the first instance; if abuse continues, agent ends the call and logs mark_disposition(status='ABUSIVE').",
+    "pass_criteria": "Exactly one warning issued before hangup; ABUSIVE disposition logged; agent tone remains calm throughout."
+  },
+  {
+    "test_id": "TC-010",
+    "category": "Bilingual Switch (Bonus)",
+    "input_sequence": [
+      "Haan main Rahul bol raha hoon",
+      "PAN number 1234 hai",
+      "Main Friday tak pay kar dunga"
+    ],
+    "expected_behavior": "Agent responds in Hindi/Hinglish matching the caller, without losing state or failing to extract the PTP date correctly.",
+    "pass_criteria": "Correct tool parameters (ptp_date, amount) extracted despite the language switch."
+  }
+]

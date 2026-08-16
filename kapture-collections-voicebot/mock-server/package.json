@@ -1,0 +1,13 @@
+{
+  "name": "kapture-mock-webhook-server",
+  "version": "1.0.0",
+  "description": "Mock webhook server implementing Vapi tool-call endpoints for the Kapture Finance collections voicebot (Maya).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
