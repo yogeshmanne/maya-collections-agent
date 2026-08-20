@@ -1,0 +1,103 @@
+// Prisma schema for the Kapture Finance collections voicebot backend.
+// Provider is postgresql — this is a real relational schema, not a mock.
+// Point DATABASE_URL at any Postgres instance (local, RDS, Supabase, etc.)
+// and `npm run db:migrate:dev` will create these tables for real.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A loan account under collection. In production this would be synced
+// from the loan management system (LMS); here it's the source of truth
+// for the demo/test data.
+model Account {
+  id               String   @id @default(cuid())
+  accountRef       String   @unique // business-facing ID, e.g. ACC-88392
+  customerName     String
+  loanType         String
+  amountDue        Decimal  @db.Decimal(12, 2)
+  daysPastDue      Int
+  verificationHash String   // hashed PAN-last-4 / birth-year — never store raw
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  calls Call[]
+}
+
+// One outbound call attempt against an account. This is the anchor for
+// server-enforced state — every tool-call handler checks THIS row's state
+// before acting, independent of whatever the LLM believes the state to be.
+model Call {
+  id                  String    @id @default(cuid())
+  accountId           String
+  account             Account   @relation(fields: [accountId], references: [id])
+  vapiCallId          String?   @unique
+  state               CallState @default(INIT)
+  verificationAttempts Int      @default(0)
+  verifiedAt          DateTime?
+  startedAt           DateTime  @default(now())
+  endedAt             DateTime?
+  disposition         String?
+  dispositionNotes    String?
+
+  toolCallLogs ToolCallLog[]
+  promiseToPay PromiseToPay?
+  escalation   Escalation?
+
+  @@index([state])
+  @@index([accountId])
+}
+
+enum CallState {
+  INIT
+  AUTH_PENDING
+  AUTHENTICATED
+  NEGOTIATION
+  PTP_COLLECTED
+  ESCALATED
+  DISPOSED
+  CALL_ENDED
+}
+
+// Every tool invocation, successful or rejected, is logged here.
+// This is the audit trail — including attempts the state machine BLOCKED,
+// which is the evidence that auth is actually enforced, not just prompted.
+model ToolCallLog {
+  id         String   @id @default(cuid())
+  callId     String
+  call       Call     @relation(fields: [callId], references: [id])
+  toolName   String
+  argsJson   String // JSON-serialized args, PII-masked before storage
+  allowed    Boolean // false = blocked by the state machine guard
+  blockReason String?
+  resultJson String?
+  createdAt  DateTime @default(now())
+
+  @@index([callId])
+  @@index([toolName])
+}
+
+model PromiseToPay {
+  id        String   @id @default(cuid())
+  callId    String   @unique
+  call      Call     @relation(fields: [callId], references: [id])
+  ptpDate   DateTime
+  amount    Decimal  @db.Decimal(12, 2)
+  linkSent  Boolean  @default(false)
+  linkChannel String?
+  createdAt DateTime @default(now())
+}
+
+model Escalation {
+  id        String   @id @default(cuid())
+  callId    String   @unique
+  call      Call     @relation(fields: [callId], references: [id])
+  reason    String
+  notes     String?
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: kapture_dev_pw
+      POSTGRES_DB: kapture_collections
+    ports:
+      - "5432:5432"
+    volumes:
+      - kapture_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:kapture_dev_pw@db:5432/kapture_collections
+      PORT: 3000
+      NODE_ENV: production
+      VAPI_WEBHOOK_SECRET: ${VAPI_WEBHOOK_SECRET:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      KYC_PROVIDER_API_KEY: ${KYC_PROVIDER_API_KEY:-}
+      KYC_PROVIDER_BASE_URL: ${KYC_PROVIDER_BASE_URL:-}
+    ports:
+      - "3000:3000"
+
+volumes:
+  kapture_pg_data:
